@@ -110,8 +110,9 @@ def clone(req: BurpRequest) -> BurpRequest:
 def prepare(req: BurpRequest) -> None:
     """Prepare request by setting appropriate headers."""
     # Set Content-Length based on body bytes (latin-1 encoding)
-    if req.body:
-        req.set_header("Content-Length", str(len(req.body.encode('latin-1'))))
+    body = req._get_send_body()
+    if body:
+        req.set_header("Content-Length", str(len(body.encode('latin-1'))))
     else:
         req.set_header("Content-Length", "0")
 

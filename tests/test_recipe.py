@@ -139,3 +139,128 @@ class TestChainedRecipe:
             .add_step(*RecipeSteps.url_decode())
         decoded = recipe.apply_decode(encoded)
         assert decoded == "data=" + payload
+
+
+class TestBurpRequestWithRecipe:
+    """BurpRequest 与 Recipe 集成测试."""
+
+    def test_from_curl_with_recipe_json_body_is_dict(self):
+        """from_curl + json_parse → body 是 dict."""
+        import burpr
+        recipe = EncodingRecipe().add_step(*RecipeSteps.json_parse())
+        curl = "curl -X POST https://api.com/query -H \"Content-Type: application/json\" -d '{\"dqbm\":\"1218\",\"year\":\"2026\"}'"
+        req = burpr.from_curl(curl, recipe=recipe)
+        assert isinstance(req.body, dict)
+        assert req.body == {"dqbm": "1218", "year": "2026"}
+
+    def test_from_curl_with_recipe_form_body_is_dict(self):
+        """from_curl + form_urlencoded_parse → body 是 dict."""
+        import burpr
+        recipe = EncodingRecipe().add_step(*RecipeSteps.form_urlencoded_parse())
+        curl = 'curl -X POST https://api.com/login -d "username=admin&password=secret"'
+        req = burpr.from_curl(curl, recipe=recipe)
+        assert isinstance(req.body, dict)
+        assert req.body == {"username": "admin", "password": "secret"}
+
+    def test_from_curl_without_recipe_body_is_str(self):
+        """from_curl 不传 recipe → body 保持 str（回归）."""
+        import burpr
+        curl = 'curl -X POST https://api.com/login -d "username=%USER%&password=%PASS%"'
+        req = burpr.from_curl(curl)
+        assert isinstance(req.body, str)
+        assert req.body == "username=%USER%&password=%PASS%"
+
+    def test_to_request_encodes_body_with_recipe(self):
+        """有 recipe 时 to_request 将 body 编码回 str."""
+        import burpr
+        from unittest.mock import MagicMock
+        import sys
+
+        recipe = EncodingRecipe().add_step(*RecipeSteps.json_parse())
+        curl = 'curl -X POST https://api.com/query -H "Content-Type: application/json" -d \'{"dqbm":"1218"}\''
+        req = burpr.from_curl(curl, recipe=recipe)
+
+        # 修改 body dict
+        req.body["dqbm"] = "4401"
+
+        mock_requests = MagicMock()
+        mock_request = MagicMock()
+        mock_prepared = MagicMock()
+        mock_request.prepare.return_value = mock_prepared
+        mock_requests.Request.return_value = mock_request
+        sys.modules['requests'] = mock_requests
+
+        req.to_request()
+
+        # 验证发出的 data 是编码后的 JSON 字符串（bytes）
+        call_kwargs = mock_requests.Request.call_args[1]
+        assert call_kwargs["data"] == b'{"dqbm": "4401"}'
+
+    def test_to_request_no_recipe_unchanged(self):
+        """无 recipe 时 to_request 行为不变."""
+        import burpr
+        from unittest.mock import MagicMock
+        import sys
+
+        curl = 'curl -X POST https://api.com/login -d "username=%USER%"'
+        req = burpr.from_curl(curl)
+
+        mock_requests = MagicMock()
+        mock_request = MagicMock()
+        mock_prepared = MagicMock()
+        mock_request.prepare.return_value = mock_prepared
+        mock_requests.Request.return_value = mock_request
+        sys.modules['requests'] = mock_requests
+
+        req.to_request()
+
+        call_kwargs = mock_requests.Request.call_args[1]
+        assert call_kwargs["data"] == b"username=%USER%"
+
+    def test_bind_still_works_without_recipe(self):
+        """bind 在无 recipe 时正常工作（回归）."""
+        import burpr
+        curl = 'curl -X POST https://api.com/login -d "username=%USER%&password=%PASS%"'
+        req = burpr.from_curl(curl)
+        req.bind("%USER%", "admin").bind("%PASS%", "secret")
+        assert req.body == "username=admin&password=secret"
+
+
+class TestE2ERecipe:
+    """端到端测试."""
+
+    def test_e2e_curl_form_parse_modify_to_request(self):
+        """curl 导入 → 表单解析 → 修改 dict → to_request → 验证编码 body."""
+        import burpr
+        from unittest.mock import MagicMock
+        import sys
+
+        recipe = EncodingRecipe() \
+            .add_step(*RecipeSteps.url_decode()) \
+            .add_step(*RecipeSteps.form_urlencoded_parse())
+
+        curl = '''curl -X POST https://api.com/data \
+          -H "Content-Type: application/x-www-form-urlencoded" \
+          --data-raw 'cjsj=2026-07-22+00%3A00%3A00&dataWrap=%7B%22query%22%3A%7B%22dqbm%22%3A%221218%22%7D%7D'
+        '''
+        req = burpr.from_curl(curl, recipe=recipe)
+
+        # body 是 dict，精确修改
+        assert isinstance(req.body, dict)
+        req.body["cjsj"] = "2026-08-01 00:00:00"
+
+        mock_requests = MagicMock()
+        mock_request = MagicMock()
+        mock_prepared = MagicMock()
+        mock_request.prepare.return_value = mock_prepared
+        mock_requests.Request.return_value = mock_request
+        sys.modules['requests'] = mock_requests
+
+        req.to_request()
+
+        call_kwargs = mock_requests.Request.call_args[1]
+        # data 是 bytes（latin-1 编码），验证包含修改后的值
+        data_str = call_kwargs["data"].decode('latin-1') if isinstance(call_kwargs["data"], bytes) else call_kwargs["data"]
+        assert "2026-08-01" in data_str
+        # 验证 dataWrap 字段被正确编码（= 被 quote_plus 编码为 %3D）
+        assert "dataWrap%3D" in data_str
