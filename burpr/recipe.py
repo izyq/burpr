@@ -64,3 +64,69 @@ class EncodingRecipe:
         for _, encode_func in reversed(self.steps):
             data = encode_func(data)
         return data
+
+
+class RecipeSteps:
+    """预定义的可逆转换步骤工厂方法。
+
+    每个静态方法返回 (decode_func, encode_func) 元组。
+    前两个步骤（url_decode, base64_decode）是 str → str，
+    后两个步骤（json_parse, form_urlencoded_parse）跨越字符串/对象边界。
+    """
+
+    @staticmethod
+    def url_decode(encoding='utf-8'):
+        """URL 解码步骤：str → str.
+
+        decode: urllib.parse.unquote_plus
+        encode: urllib.parse.quote_plus
+        """
+        import urllib.parse
+        return (
+            lambda s: urllib.parse.unquote_plus(s, encoding=encoding),
+            lambda s: urllib.parse.quote_plus(s, encoding=encoding)
+        )
+
+    @staticmethod
+    def base64_decode():
+        """Base64 解码步骤：str → str.
+
+        decode: base64.b64decode → utf-8 str
+        encode: utf-8 bytes → base64.b64encode → str
+        """
+        import base64
+        return (
+            lambda s: base64.b64decode(s).decode('utf-8'),
+            lambda s: base64.b64encode(s.encode('utf-8')).decode('utf-8')
+        )
+
+    @staticmethod
+    def json_parse():
+        """JSON 解析步骤：str → dict/list（Python 原生对象）。
+
+        decode: json.loads → Python 对象
+        encode: json.dumps（ensure_ascii=False）→ str
+
+        这是最关键的一步——decode 返回真正的 Python 对象，
+        修改 body 从字符串替换升维到精确的对象操作。
+        """
+        import json
+        return (
+            lambda s: json.loads(s),
+            lambda obj: json.dumps(obj, ensure_ascii=False)
+        )
+
+    @staticmethod
+    def form_urlencoded_parse():
+        """表单数据解析步骤：str → dict.
+
+        decode: parse_qsl → dict
+        encode: urllib.parse.urlencode → str
+
+        将 key1=val1&key2=val2 解析为 {'key1': 'val1', 'key2': 'val2'}。
+        """
+        import urllib.parse
+        return (
+            lambda s: dict(urllib.parse.parse_qsl(s, keep_blank_values=True)),
+            lambda d: urllib.parse.urlencode(d)
+        )
