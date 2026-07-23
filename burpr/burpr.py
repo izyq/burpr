@@ -1,4 +1,5 @@
 import re
+from typing import Optional
 from burpr.models.BurpRequest import BurpRequest
 from burpr.enums.TransportEnum import TransportEnum
 from burpr.enums.ProtocolEnum import ProtocolEnum
@@ -136,12 +137,13 @@ def to_burp_format(req: BurpRequest) -> str:
     return "\n".join(lines)
 
 
-def from_curl(curl_command: str) -> BurpRequest:
+def from_curl(curl_command: str, recipe: Optional['EncodingRecipe'] = None) -> BurpRequest:
     """Convert a curl command to BurpRequest.
-    
+
     Args:
         curl_command: curl command string
-        
+        recipe: Optional EncodingRecipe to decode the body
+
     Returns:
         BurpRequest object
     """
@@ -206,8 +208,11 @@ def from_curl(curl_command: str) -> BurpRequest:
         # Set Content-Type if not already set
         if "Content-Type" not in headers and method in ["POST", "PUT", "PATCH"]:
             headers["Content-Type"] = "application/x-www-form-urlencoded"
-    
-    return BurpRequest(
+
+    if recipe and body:
+        body = recipe.apply_decode(body)
+
+    request = BurpRequest(
         host=protocol_host,
         path=path,
         protocol=ProtocolEnum.HTTP1_1,
@@ -216,6 +221,8 @@ def from_curl(curl_command: str) -> BurpRequest:
         body=body,
         transport=transport
     )
+    request._recipe = recipe
+    return request
 
 
 def from_requests_response(response) -> BurpRequest:
