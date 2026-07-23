@@ -65,6 +65,32 @@ class EncodingRecipe:
             data = encode_func(data)
         return data
 
+    def verify(self, data: str) -> dict:
+        """解码后不修改直接编码回去，对比 round-trip 是否一致。
+
+        Args:
+            data: 原始编码字符串
+
+        Returns:
+            {'equal': bool, 'original': str, 'decoded': Any, 're_encoded': str}
+        用法：
+
+        recipe = EncodingRecipe().add_step(*RecipeSteps.form_urlencoded_parse())
+        result = recipe.verify(body)
+        print(result['equal'])       # True/False
+        print(result['original'])    # 原始编码
+        print(result['decoded'])     # 解码后的 Python 对象
+        print(result['re_encoded'])  # 重新编码的字符串
+        """
+        decoded = self.apply_decode(data)
+        re_encoded = self.apply_encode(decoded)
+        return {
+            'equal': data == re_encoded,
+            'original': data,
+            'decoded': decoded,
+            're_encoded': re_encoded,
+        }
+
 
 class RecipeSteps:
     """预定义的可逆转换步骤工厂方法。
