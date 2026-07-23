@@ -76,9 +76,8 @@ req = burpr.from_http2({
 ```python
 from burpr import EncodingRecipe, RecipeSteps
 
-# URL 编码的表单 body → dict
+# 表单 body → dict（form_urlencoded_parse 自带 URL 解码，不需要额外 url_decode）
 recipe = EncodingRecipe() \
-    .add_step(*RecipeSteps.url_decode()) \
     .add_step(*RecipeSteps.form_urlencoded_parse())
 
 curl = 'curl -X POST https://api.com/data --data-raw "key1=%VAL1%&key2=%VAL2%"'
@@ -99,14 +98,13 @@ req = burpr.from_curl('curl -X POST https://api.com -d \'{"dqbm":"1218"}\'', rec
 
 # 精确修改
 req.body['dqbm'] = '%CITY_CODE%'
-# 发送 → 自动 json.dumps 编码
+# 发送 → 自动 json.dumps 编码（ensure_ascii=False，中文不会被转 \uXXXX）
 ```
 
 ```python
-# 链式组合：多重编码 → 对象
+# 链式组合：Base64 → JSON → dict（适合多层编码 body）
 recipe = EncodingRecipe() \
     .add_step(*RecipeSteps.base64_decode()) \
-    .add_step(*RecipeSteps.url_decode()) \
     .add_step(*RecipeSteps.json_parse())
 ```
 
