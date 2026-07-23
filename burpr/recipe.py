@@ -139,7 +139,7 @@ class RecipeSteps:
         import json
         return (
             lambda s: json.loads(s),
-            lambda obj: json.dumps(obj, ensure_ascii=False)
+            lambda obj: json.dumps(obj, ensure_ascii=False,separators=(',', ':'))
         )
 
     @staticmethod
