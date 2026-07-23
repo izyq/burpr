@@ -16,7 +16,8 @@ class BurpRequest:
     self.protocol = protocol
     self.method = method
     self.headers = headers if headers is not None else {}
-    self.body = body
+    self._body = body
+    self._recipe = None
     self.transport = transport
 
   @property
@@ -24,9 +25,18 @@ class BurpRequest:
     return f'{self.transport}://{self.host}{self.path}'
 
   @property
-  def is_http2(self): 
+  def is_http2(self):
     return self.protocol == ProtocolEnum.HTTP2
 
+  @property
+  def body(self):
+    """读取 body——解码后的对象或字符串."""
+    return self._body
+
+  @body.setter
+  def body(self, value):
+    """设置 body——接受 str、dict、list 等任意类型."""
+    self._body = value
 
   def set_header(self, header_key, header_value):
     # Convert bytes to string using latin-1 if needed
@@ -34,7 +44,7 @@ class BurpRequest:
       header_value = header_value.decode('latin-1')
     self.headers[header_key] = str(header_value)
 
-  
+
   def set_body(self, body):
     # Convert bytes to string using latin-1 if needed
     if isinstance(body, bytes):
@@ -76,6 +86,12 @@ class BurpRequest:
     
     return self
   
+  def _get_send_body(self):
+    """获取发送时应使用的 body——若有 recipe 则自动逆编码."""
+    if self._recipe:
+      return self._recipe.apply_encode(self._body)
+    return self._body
+
   def to_request(self, session=None, auto_prepare=True):
     """Convert to a requests.Request or requests.PreparedRequest object.
     
@@ -101,7 +117,7 @@ class BurpRequest:
         method=self.method,
         url=url,
         headers=self.headers.copy(),
-        data=self.body.encode('latin-1') if self.body else None
+        data=self._get_send_body().encode('latin-1') if self._get_send_body() else None
     )
     
     if session:
@@ -163,6 +179,6 @@ class BurpRequest:
         method=self.method,
         url=self.url,
         headers=self.headers,
-        content=self.body.encode('latin-1') if self.body else None,
+        content=self._get_send_body().encode('latin-1') if self._get_send_body() else None,
         **kwargs
     )
