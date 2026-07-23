@@ -5,6 +5,28 @@ All notable changes to burpr will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-23
+
+### Added
+- `EncodingRecipe` 可逆编码转换管道 — 类似 CyberChef 的 recipe 模式
+  - 支持链式添加解码/编码步骤对，解码后 body 变为 Python 原生对象（dict、list 等）
+  - 修改对象后发送时自动逆编码回原始格式
+- `RecipeSteps` 预定义步骤工厂方法：
+  - `url_decode()` — URL 解码/编码（str ⇄ str）
+  - `base64_decode()` — Base64 解码/编码（str ⇄ str）
+  - `json_parse()` — JSON 解析/序列化（str ⇄ dict/list）
+  - `form_urlencoded_parse()` — 表单解析/序列化（str ⇄ dict）
+- `BurpRequest.body` 改为 property，支持 str 和 dict/list 等任意类型
+- `BurpRequest._recipe` 属性 — 关联的 EncodingRecipe，发送时自动逆编码
+- `BurpRequest._get_send_body()` — 获取发送用 body，有 recipe 则自动 `apply_encode`
+- `from_curl()` 新增 `recipe` 参数 — 解析时自动解码 body
+- `prepare()` 适配 dict body — 通过 `_get_send_body()` 计算正确的 Content-Length
+
+### Changed
+- `BurpRequest.__init__` — body 存储为 `_body`，通过 property 访问
+- `to_request()` / `make_request()` / `make_httpx_request()` — 发送前自动调用 `_get_send_body()`
+- `burpr.__init__` — 导出 `EncodingRecipe` 和 `RecipeSteps`
+
 ## [0.3.0] - 2025-01-27
 
 ### Added

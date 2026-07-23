@@ -69,6 +69,47 @@ req = burpr.from_http2({
 })
 ```
 
+## EncodingRecipe — 可逆编码转换管道
+
+将编码的请求 body 解码为 Python 原生对象，修改后发送时自动逆编码。类似 CyberChef 的 recipe 模式。
+
+```python
+from burpr import EncodingRecipe, RecipeSteps
+
+# URL 编码的表单 body → dict
+recipe = EncodingRecipe() \
+    .add_step(*RecipeSteps.url_decode()) \
+    .add_step(*RecipeSteps.form_urlencoded_parse())
+
+curl = 'curl -X POST https://api.com/data --data-raw "key1=%VAL1%&key2=%VAL2%"'
+req = burpr.from_curl(curl, recipe=recipe)
+
+# req.body 是 dict，精确操作
+assert isinstance(req.body, dict)
+req.body['key1'] = 'new_value'  # 字符串替换 → 对象操作
+
+# 发送时自动逆编码（dict → urlencode → str）
+response = req.make_request()
+```
+
+```python
+# JSON body → dict
+recipe = EncodingRecipe().add_step(*RecipeSteps.json_parse())
+req = burpr.from_curl('curl -X POST https://api.com -d \'{"dqbm":"1218"}\'', recipe=recipe)
+
+# 精确修改
+req.body['dqbm'] = '%CITY_CODE%'
+# 发送 → 自动 json.dumps 编码
+```
+
+```python
+# 链式组合：多重编码 → 对象
+recipe = EncodingRecipe() \
+    .add_step(*RecipeSteps.base64_decode()) \
+    .add_step(*RecipeSteps.url_decode()) \
+    .add_step(*RecipeSteps.json_parse())
+```
+
 ## Placeholder System
 ```python
 # Use %PLACEHOLDER% format for dynamic values
