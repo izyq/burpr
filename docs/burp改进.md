@@ -70,6 +70,8 @@ class RecipeSteps:
         
         这是最关键的一步——decode 返回真正的 Python 对象，不再是字符串。
         修改 body 从字符串拼接/替换升维到精确的对象操作。
+
+        注意：encode 使用 json.dumps(obj, ensure_ascii=False) 避免中文被转 \uXXXX。
         """
         return lambda s: json.loads(s), \
                lambda obj: json.dumps(obj, ensure_ascii=False)
@@ -132,11 +134,11 @@ recipe = EncodingRecipe().add_step(*RecipeSteps.url_decode())
 ```python
 # 第一步：表单 → dict
 body_dict = recipe.apply_decode(original_body)
-# 第二步：手动解析嵌套 JSON 字段
+# 第二步：手动解析嵌套 JSON 字段（中文用 ensure_ascii=False 避免 \uXXXX 转义）
 import json
 body_dict['dataWrap'] = json.loads(body_dict['dataWrap'])
 body_dict['dataWrap']['query']['dqbm'] = '%CITY_CODE%'     # 精确修改！
-body_dict['dataWrap'] = json.dumps(body_dict['dataWrap'])  # 还原为 JSON 字符串
+body_dict['dataWrap'] = json.dumps(body_dict['dataWrap'], ensure_ascii=False)  # 还原为 JSON 字符串
 # 第三步：发送前自动编码回表单格式
 encoded = recipe.apply_encode(body_dict)
 ```
@@ -256,7 +258,8 @@ req.body['cjsj'] = '2026-08-01 00:00:00'
 import json
 dw = json.loads(req.body['dataWrap'])
 dw['query']['dqbm'] = '%CITY_CODE%'   # 精确命中 'dqbm'，不会误改
-req.body['dataWrap'] = json.dumps(dw)
+# 用 ensure_ascii=False 避免中文变成 \uXXXX
+req.body['dataWrap'] = json.dumps(dw, ensure_ascii=False)
 
 # 4. 发送请求（自动逆编码：dict → urlencode → str）
 response = req.make_request()
