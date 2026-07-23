@@ -206,8 +206,11 @@ def from_curl(curl_command: str, recipe: Optional['EncodingRecipe'] = None) -> B
     
     if data_match:
         body = data_match.group(1)
+        # curl: -X not specified but data present → default to POST
+        if not method_match:
+            method = "POST"
         # Set Content-Type if not already set
-        if "Content-Type" not in headers and method in ["POST", "PUT", "PATCH"]:
+        if "Content-Type" not in headers:
             headers["Content-Type"] = "application/x-www-form-urlencoded"
 
     if recipe and body:
