@@ -18,6 +18,7 @@ class BurpRequest:
     self.headers = headers if headers is not None else {}
     self._body = body
     self._recipe = None
+    self._raw_body = None
     self.transport = transport
 
   @property
@@ -91,6 +92,29 @@ class BurpRequest:
     if self._recipe:
       return self._recipe.apply_encode(self._body)
     return self._body
+
+  def verify(self):
+    """验证 recipe 解码再编码能否恢复原样（round-trip 校验）。
+
+    对比当前 body 逆编码后的结果与 from_curl 解析时的原始 body。
+    用于确认 recipe 的编码步骤配置正确——如果 equal 为 False，
+    说明 decode/encode 不对称，服务器收到的格式会和原始请求不同。
+
+    Returns:
+        {'equal': bool, 'original': str, 'decoded': Any, 're_encoded': str}
+
+    Raises:
+        ValueError: 请求没有 recipe 时（未通过 from_curl 传入 recipe）
+    """
+    if not self._recipe:
+      raise ValueError("verify() 需要请求带有 recipe（from_curl 传入 recipe 参数）")
+    re_encoded = self._recipe.apply_encode(self._body)
+    return {
+      'equal': re_encoded == self._raw_body,
+      'original': self._raw_body,
+      'decoded': self._body,
+      're_encoded': re_encoded,
+    }
 
   def to_request(self, session=None, auto_prepare=True):
     """Convert to a requests.Request or requests.PreparedRequest object.
