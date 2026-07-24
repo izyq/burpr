@@ -92,6 +92,28 @@ class BurpRequest:
       return self._recipe.apply_encode(self._body)
     return self._body
 
+  def verify(self):
+    """验证 recipe 解码再编码能否恢复原样（round-trip 校验）。
+
+    对比当前 body 逆编码后的结果与 from_curl 解析时的原始 body。
+    用于确认 recipe 的编码步骤配置正确。
+
+    Returns:
+        {'equal': bool, 'original': str, 'decoded': Any, 're_encoded': str}
+
+    Raises:
+        ValueError: 请求没有 recipe 时
+    """
+    if not self._recipe:
+      raise ValueError("verify() need recipe")
+    re_encoded = self._recipe.apply_encode(self._body)
+    return {
+      'equal': re_encoded == self._raw_body,
+      'original': self._raw_body,
+      'decoded': self._body,
+      're_encoded': re_encoded,
+    }
+
   def to_request(self, session=None, auto_prepare=True):
     """Convert to a requests.Request or requests.PreparedRequest object.
     

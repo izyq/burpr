@@ -16,8 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `base64_decode()` — Base64 解码/编码（str ⇄ str）
   - `json_parse()` — JSON 解析/序列化（str ⇄ dict/list）
   - `form_urlencoded_parse()` — 表单解析/序列化（str ⇄ dict）
-- `EncodingRecipe.verify()` — 不做修改直接解码再编码，对比原始字符串，验证 recipe round-trip 是否正确
-- Recipe 可独立于 BurpRequest 使用：`apply_decode` / `apply_encode` / `verify` 三个方法直接调用
+- Recipe 可独立于 BurpRequest 使用：`apply_decode` / `apply_encode` 方法直接调用
+- `BurpRequest.verify()` — 解码再编码对比原始 body，验证 recipe round-trip 是否正确
 - `BurpRequest.body` 改为 property，支持 str 和 dict/list 等任意类型
 - `BurpRequest._recipe` 属性 — 关联的 EncodingRecipe，发送时自动逆编码
 - `BurpRequest._get_send_body()` — 获取发送用 body，有 recipe 则自动 `apply_encode`

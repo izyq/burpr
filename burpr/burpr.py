@@ -213,7 +213,9 @@ def from_curl(curl_command: str, recipe: Optional['EncodingRecipe'] = None) -> B
         if "Content-Type" not in headers:
             headers["Content-Type"] = "application/x-www-form-urlencoded"
 
+    raw_body = None
     if recipe and body:
+        raw_body = body
         body = recipe.apply_decode(body)
 
     request = BurpRequest(
@@ -226,6 +228,7 @@ def from_curl(curl_command: str, recipe: Optional['EncodingRecipe'] = None) -> B
         transport=transport
     )
     request._recipe = recipe
+    request._raw_body = raw_body
     return request
 
 
