@@ -150,7 +150,7 @@ def from_curl(curl_command: str, recipe: Optional['EncodingRecipe'] = None) -> B
     """
     # Extract URL - look for curl followed by URL
     # Handle various curl formats: curl URL, curl -X METHOD URL, curl -options URL
-    url_match = re.search(r'curl\s+(?:-[A-Za-z]\s+[^\s]+\s+)*(["\']?)([^\s"\'-]+)\1', curl_command)
+    url_match = re.search(r'curl\s+(?:-[A-Za-z]\s+[^\s]+\s+)*(["\']?)([^\s"\']+)\1', curl_command)
     if not url_match:
         # If no match, check if it's just "curl" without URL
         if re.match(r'^\s*curl\s*(?:-[A-Za-z]\s+[^\s]+\s*)*$', curl_command):
