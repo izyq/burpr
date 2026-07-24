@@ -141,6 +141,9 @@ def to_burp_format(req: BurpRequest) -> str:
 def from_curl(curl_command: str, recipe: Optional['EncodingRecipe'] = None) -> BurpRequest:
     """Convert a curl command to BurpRequest.
 
+    解析委托给 burpr.curlconvert(完整移植自 curlconverter):
+    tree-sitter-bash AST → argv → 选项表 → Request,再映射成 BurpRequest。
+
     Args:
         curl_command: curl command string
         recipe: Optional EncodingRecipe to decode the body
@@ -148,78 +151,45 @@ def from_curl(curl_command: str, recipe: Optional['EncodingRecipe'] = None) -> B
     Returns:
         BurpRequest object
     """
-    # Extract URL - look for curl followed by URL
-    # Handle various curl formats: curl URL, curl -X METHOD URL, curl -options URL
-    url_match = re.search(r'curl\s+(?:-[A-Za-z]\s+[^\s]+\s+)*(["\']?)([^\s"\']+)\1', curl_command)
-    if not url_match:
-        # If no match, check if it's just "curl" without URL
-        if re.match(r'^\s*curl\s*(?:-[A-Za-z]\s+[^\s]+\s*)*$', curl_command):
-            raise BurpParseError("No URL found in curl command")
-        raise BurpParseError("Invalid curl command format")
-    
-    url = url_match.group(2)
-    
-    # Validate URL
-    if url.startswith('-') or url == '://':
+    from burpr.curlconvert import parse, get_first
+
+    warnings = []
+    requests = parse(curl_command, warnings=warnings)
+    request = get_first(requests, warnings)
+
+    url = request["urls"][0]
+    url_obj = url["urlObj"]
+
+    host = url_obj["host"].to_string()
+    if not host:
         raise BurpParseError("Invalid URL format")
-    
-    # Parse URL components
-    if not url.startswith(('http://', 'https://')):
-        url = 'https://' + url
-    
-    # Extract host and path
-    url_parts = url.split('/', 3)
-    if len(url_parts) < 3 or not url_parts[2]:
-        raise BurpParseError("Invalid URL format")
-    
-    protocol_host = url_parts[2]
-    path = '/' + (url_parts[3] if len(url_parts) > 3 else '')
-    
-    # Determine transport
-    transport = TransportEnum.HTTPS if url.startswith('https://') else TransportEnum.HTTP
-    
-    # Extract method
-    method = "GET"
-    method_match = re.search(r'-X\s+([A-Z]+)', curl_command)
-    if method_match:
-        method = method_match.group(1)
-    
-    # Extract headers
-    headers = {"Host": protocol_host}
-    header_matches = re.finditer(r'-H\s+["\']([^"\']+)["\']', curl_command)
-    for match in header_matches:
-        header = match.group(1)
-        if ':' in header:
-            key, value = header.split(':', 1)
-            headers[key.strip()] = value.strip()
-    
-    # Extract data/body
-    body = ""
-    # Try with single quotes first (common for JSON)
-    data_match = re.search(r'(?:-d|--data|--data-raw)\s+\'([^\']+)\'', curl_command)
-    if not data_match:
-        # Try with double quotes
-        data_match = re.search(r'(?:-d|--data|--data-raw)\s+"([^"]+)"', curl_command)
-    if not data_match:
-        # Try without quotes
-        data_match = re.search(r'(?:-d|--data|--data-raw)\s+(\S+)', curl_command)
-    
-    if data_match:
-        body = data_match.group(1)
-        # curl: -X not specified but data present → default to POST
-        if not method_match:
-            method = "POST"
-        # Set Content-Type if not already set
-        if "Content-Type" not in headers:
-            headers["Content-Type"] = "application/x-www-form-urlencoded"
+
+    # path 带前导 '/',query 带前导 '?'
+    path = url_obj["path"].to_string() or '/'
+    path += url_obj["query"].to_string()
+
+    scheme = url_obj["scheme"].to_string()
+    transport = TransportEnum.HTTPS if scheme == 'https' else TransportEnum.HTTP
+
+    method = url["method"].to_string()
+
+    # 头:Host 取自 URL;显式 -H 'Host: x' 覆盖。值为 None 表示显式禁用,跳过。
+    headers = {"Host": host}
+    for name, value in request["headers"]:
+        if value is None:
+            continue
+        headers[name.to_string()] = value.to_string()
+
+    # body:curlconverter 已把多个 -d 按 curl 语义用 & 拼好
+    body = request["data"].to_string() if request.get("data") else ""
 
     raw_body = None
     if recipe and body:
         raw_body = body
         body = recipe.apply_decode(body)
 
-    request = BurpRequest(
-        host=protocol_host,
+    burp_request = BurpRequest(
+        host=host,
         path=path,
         protocol=ProtocolEnum.HTTP1_1,
         method=method,
@@ -227,9 +197,9 @@ def from_curl(curl_command: str, recipe: Optional['EncodingRecipe'] = None) -> B
         body=body,
         transport=transport
     )
-    request._recipe = recipe
-    request._raw_body = raw_body
-    return request
+    burp_request._recipe = recipe
+    burp_request._raw_body = raw_body
+    return burp_request
 
 
 def from_requests_response(response) -> BurpRequest:

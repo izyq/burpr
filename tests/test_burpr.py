@@ -342,7 +342,7 @@ class TestCurlParsing:
         
         assert req.host == "api.example.com"
         assert req.path == "/test"
-        assert req.transport == TransportEnum.HTTPS  # Default to HTTPS
+        assert req.transport == TransportEnum.HTTP  # curlconverter 在无 scheme 时默认 http
     
     def test_curl_with_data_raw(self):
         """Test curl with --data-raw."""
@@ -711,7 +711,7 @@ Invalid Header Without Colon
     
     def test_curl_no_url(self):
         """Test curl without URL raises error."""
-        with pytest.raises(burpr.BurpParseError, match="No URL found"):
+        with pytest.raises(burpr.BurpParseError, match="no URL specified"):
             burpr.from_curl("curl -X POST")
     
     def test_curl_invalid_url(self):

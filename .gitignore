@@ -86,4 +86,4 @@ target/
 # mypy
 .mypy_cache/
 .dmypy.json
-dmypy.json
+dmypy.jsonburpr/curlconvert/__pycache__
